@@ -1,18 +1,28 @@
 #include <Arduino.h>
+#include "Epaper213.h"
 
-// put function declarations here:
-int myFunction(int, int);
+Epaper213 epd;
+
+namespace {
+	constexpr uint16_t CLOCK_X = 5, CLOCK_Y = 0;
+	constexpr uint16_t DAY_X = 5, DAY_Y = 90;
+	uint32_t last = 0;
+	bool ready = false;
+}
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+	Serial.begin(115200);
+	delay(500);
+	if (!epd.begin()) return;
+	epd.clear();
+	epd.drawText(CLOCK_X, CLOCK_Y, "23:45", EpaperFont::ClockBold);
+	epd.drawText(DAY_X, DAY_Y, "czwartek", EpaperFont::LargeBold);
+	if (!epd.fullRefresh()) return;
+	ready = true;
+	last = millis();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+	if (!ready || millis() - last < 1000) return;
+	last = millis();
 }
