@@ -10,7 +10,27 @@ Seeed ePaper Breakout Board for XIAO V2: RST D0, CS D1, BUSY D2, DC D3, SCK D8, 
 
 `pio run -e seeed_xiao_esp32c3`; `pio run -e seeed_xiao_esp32c3 -t upload`. Logi Serial: 115200 baud. Bez Seeed GFX i bez dynamicznej alokacji.
 
-Test po starcie: statyczna godzina 12:45 w ClockBold, pozycja (5,13), rozmiar komórek 240 × 96 px. Co sekundę dwukropek jest pokazywany/ukrywany przez partial refresh jego komórki 48 × 96 px. Co 60 zmian wykonywany jest celowy full refresh usuwający ghosting. To test renderowania, nie rzeczywisty zegar (bez RTC/NTP).
+Firmware jest zegarem HH:MM z nieruchomym dwukropkiem, pozycja (5,13), komórki 240 × 96 px. Konfiguracja: `src/ClockConfig.h`; przed wgraniem wpisz WIFI_SSID i WIFI_PASSWORD (domyślnie puste). Nie publikuj pliku z hasłem. `src/Clock.cpp` zawiera cykl pracy, `src/ClockLogic.h` testowalne decyzje, a `src/main.cpp` tylko wywołanie setupClock().
+
+## Cykl zegara
+
+Diagnostyka: `DEEP_SLEEP_ENABLED = false` jest obecnie ustawieniem domyślnym. ESP32 pozostaje aktywny, `loopClock()` wykonuje cykle bez ponownej inicjalizacji stanu zegara, a USB Serial pozostaje dostępny. Monitor: 115200 baud. Po Serial.begin() firmware czeka maksymalnie 5 s na monitor; co 10 s loguje `Clock alive`. Przy nieudanym NTP i niewiarygodnym czasie ponawia próbę po 60 s tylko w trybie bez deep sleep. Po poprawnej synchronizacji nadal obowiązuje 6 godzin. Panel jest usypiany między aktualizacjami także w diagnostyce. Ustaw `DEEP_SLEEP_ENABLED = true` przed testami bateryjnymi; diagnostyka nie jest energooszczędnym trybem produkcyjnym. `CLOCK_TEST_MODE` jest niezależny i pozostaje wyłączony: diagnozowane są rzeczywiste Wi-Fi i NTP.
+
+- Zimny start/reset: Wi-Fi, NTP, pełne odświeżenie, deep sleep. Timeout Wi-Fi 15 s, NTP 10 s. Sukces oznacza nową odpowiedź SNTP, nie tylko poprawną datę z RTC.
+- Timer wake: odczyt czasu systemowego, aktualizacja zmienionych cyfr, sen do następnej granicy minuty według gettimeofday(). Wi-Fi pozostaje wyłączone, poza terminami synchronizacji.
+- Synchronizacja co 6 godzin według czasu absolutnego. Nieudana próba także wyznacza następny termin za 6 godzin: brak prób co minutę przy niedostępnej sieci. Poprawny dotychczasowy czas nie jest kasowany. Bez wiarygodnej daty (próg 2024-01-01 UTC) ekran pokazuje --:--.
+- Polska: CET-1CEST,M3.5.0/2,M10.5.0/3, ustawiane po każdym wybudzeniu. Produkcja nie prowadzi własnego licznika minut; RTC utrzymuje czas systemowy. Korekta NTP zmieniająca widoczne HH:MM wymusza full refresh.
+- Full refresh: reset, błąd bazy, zmiana godziny, zmiana poprawności czasu, upływ godziny, cofnięcie czasu lub limit 30 operacji partial. Liczniki i poprzedni obraz aktualizowane dopiero po sukcesie drivera.
+- RAM RTC przechowuje terminy, poprzednią godzinę/minutę, licznik, flagi i znacznik wersji. Obiekt drivera, Wi-Fi i framebuffer są zwykłą RAM: framebuffer odtwarzany jest w całości z zachowanego opisu obrazu.
+- Panel usypiany jest przed ESP32. Po wybudzeniu begin() resetuje kontroler; restoreBaseImage() zapisuje odtworzony poprzedni obraz do obu banków bez odświeżenia. Następnie framebuffer jest przerysowany na aktualny czas i odświeżane są zmienione komórki. Zapis obu banków nie jest full refresh.
+
+## Testy i ograniczenia sprzętowe
+
+`CLOCK_TEST_MODE = true`: symulowany czas startuje od 12:59 czasu polskiego 1 stycznia 2026, przesuwa się o minutę po każdym wybudzeniu; sen trwa 2 s, synchronizacja jest symulowana co 2 minuty i nie włącza Wi-Fi. Rzeczywisty czas cyklu obejmuje dodatkowo rozruch i waveform panelu. Produkcja domyślnie ma ten tryb wyłączony.
+
+Test hostowy (Linux/WSL, g++): `g++ -std=c++11 test/clock_logic.cpp -o /tmp/clock_logic_test && /tmp/clock_logic_test`. Sprawdza harmonogram, próg daty, sen, full refresh i granice CET/CEST w 2026. Test hostowy używa libc hosta; nie zastępuje sprawdzenia newlib na ESP32.
+
+Po wgraniu sprawdź: zimny start i NTP, brak Wi-Fi bez zawieszania, partial po uśpieniu/resetowaniu panelu, przejścia 12:39→12:40 i 12:59→13:00, limit partial oraz odzyskanie poprawnego czasu. Odtwarzanie bazowej RAM po sleep wymaga walidacji na konkretnym panelu V4. Jeśli panel jest fizycznie resetowany/odłączany niezależnie od ESP32, wykonaj reset ESP32, aby wymusić pełny obraz. Parametr 30 należy dobrać do panelu i temperatury; nie gwarantuje braku ghostingu. Czas pracy LiPo 1200 mAh wymaga pomiaru prądu całej płytki, regulatora i panelu. Wi-Fi i wewnętrzne komponenty frameworka mogą alokować pamięć; logika aplikacji nie dodaje własnych alokacji dynamicznych.
 
 ## API i pamięć
 

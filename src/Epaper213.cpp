@@ -138,6 +138,14 @@ void Epaper213::fillRect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, bool wh
 		for (uint16_t j = y; j < ye; ++j) setPixel(i, j, white);
 }
 
+bool Epaper213::restoreBaseImage() {
+	if (!ready_) return false;
+	write(0x24, 0, 15, 0, WIDTH - 1);
+	write(0x26, 0, 15, 0, WIDTH - 1);
+	base_ = busy();
+	return base_;
+}
+
 bool Epaper213::fullRefresh() {
 	if (!ready_) return false;
 	Serial.println("EPD full refresh");

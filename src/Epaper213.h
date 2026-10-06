@@ -31,6 +31,8 @@ public:
 	static uint16_t textWidth(const char *text, EpaperFont font = EpaperFont::Small);
 	static uint8_t fontHeight(EpaperFont font = EpaperFont::Small);
 	bool fullRefresh();
+	// Load the reconstructed previous image without triggering a refresh.
+	bool restoreBaseImage();
 	bool partialRefresh(uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 	void sleep();
 private:
